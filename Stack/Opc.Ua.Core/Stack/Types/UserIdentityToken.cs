@@ -12,15 +12,14 @@
 
 using System;
 using System.Text;
-using System.ServiceModel.Security;
 using System.Security.Cryptography.X509Certificates;
 
 namespace Opc.Ua
 {
-	/// <summary>
-	/// The UserIdentityToken class.
-	/// </summary>
-	public partial class UserIdentityToken
+    /// <summary>
+    /// The UserIdentityToken class.
+    /// </summary>
+    public partial class UserIdentityToken
 	{                
         #region Public Methods
         /// <summary>
@@ -143,7 +142,7 @@ namespace Opc.Ua
                 {
                     if (senderNonce[ii] != decryptedPassword[ii+startOfNonce])
                     {
-                        throw new ServiceResultException(StatusCodes.BadSecurityChecksFailed);
+                        throw new ServiceResultException(StatusCodes.BadIdentityTokenRejected);
                     }
                 }
             }            
@@ -169,7 +168,14 @@ namespace Opc.Ua
         /// </summary>
         public X509Certificate2 Certificate
         {
-            get { return m_certificate;  }
+            get
+            {
+                if (m_certificate == null && m_certificateData != null)
+                {
+                    return CertificateFactory.Create(m_certificateData, true);
+                }
+                return m_certificate;
+            }
             set { m_certificate = value; }
         }
         #endregion
@@ -225,13 +231,30 @@ namespace Opc.Ua
         private X509Certificate2 m_certificate;
         #endregion
     }
-        
-	/// <summary>
-	/// The IssuedIdentityToken class.
-	/// </summary>
-	public partial class IssuedIdentityToken
+
+    public enum IssuedTokenType
+    {
+        GenericWSS,
+        SAML,
+        JWT,
+        KerberosBinary
+    };
+
+    /// <summary>
+    /// The IssuedIdentityToken class.
+    /// </summary>
+    public partial class IssuedIdentityToken
 	{
         #region Public Properties
+        /// <summary>
+        /// The type of issued token.
+        /// </summary>
+        public IssuedTokenType IssuedTokenType
+        {
+            get;
+            set;
+        }
+
         /// <summary>
         /// The decrypted password associated with the token.
         /// </summary>
@@ -248,6 +271,14 @@ namespace Opc.Ua
         /// </summary>
         public override void Encrypt(X509Certificate2 certificate, byte[] senderNonce, string securityPolicyUri)
         {
+            // handle no encryption.
+            if (String.IsNullOrEmpty(securityPolicyUri) || securityPolicyUri == SecurityPolicies.None)
+            {
+                m_tokenData = m_decryptedTokenData;
+                m_encryptionAlgorithm = String.Empty;
+                return;
+            }
+
             byte[] dataToEncrypt = Utils.Append(m_decryptedTokenData, senderNonce);
 
             EncryptedData encryptedData = SecurityPolicies.Encrypt(
@@ -264,6 +295,13 @@ namespace Opc.Ua
         /// </summary>
         public override void Decrypt(X509Certificate2 certificate, byte[] senderNonce, string securityPolicyUri)
         {
+            // handle no encryption.
+            if (String.IsNullOrEmpty(securityPolicyUri) || securityPolicyUri == SecurityPolicies.None)
+            {
+                m_decryptedTokenData = m_tokenData;
+                return;
+            }
+
             EncryptedData encryptedData = new EncryptedData();
 
             encryptedData.Data = m_tokenData;
@@ -285,7 +323,7 @@ namespace Opc.Ua
                 {
                     if (senderNonce[ii] != decryptedTokenData[ii+startOfNonce])
                     {
-                        throw new ServiceResultException(StatusCodes.BadSecurityChecksFailed);
+                        throw new ServiceResultException(StatusCodes.BadIdentityTokenRejected);
                     }
                 }
             }         

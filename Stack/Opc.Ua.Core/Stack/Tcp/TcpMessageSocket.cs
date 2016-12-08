@@ -432,6 +432,8 @@ namespace Opc.Ua.Bindings
                 return ServiceResult.Good;
             }
 
+            // Utils.Trace("Bytes read: {0}", bytesRead);
+
             m_bytesReceived += bytesRead;
 
             // check if more data left to read.
@@ -439,15 +441,6 @@ namespace Opc.Ua.Bindings
             {
                 ReadNextBlock();
                 
-#if TRACK_MEMORY
-                int cookie = BitConverter.ToInt32(m_receiveBuffer, 0);
-
-                if (cookie < 0)
-                {
-                    Utils.Trace("BufferCookieError (ReadNextBlock): Cookie={0:X8}", cookie);
-                }
-#endif
-
                 return ServiceResult.Good;
             }
 
@@ -485,6 +478,10 @@ namespace Opc.Ua.Bindings
                 {
                     // send notification (implementor responsible for freeing buffer) on success.
                     ArraySegment<byte> messageChunk = new ArraySegment<byte>(m_receiveBuffer, 0, m_incomingMessageSize);
+
+                    // must allocate a new buffer for the next message.
+                    m_receiveBuffer = null;
+
                     m_sink.OnMessageReceived(this, messageChunk);
                 }
                 catch (Exception ex)
@@ -528,6 +525,13 @@ namespace Opc.Ua.Bindings
                 }
 
                 socket = m_socket;
+
+                // avoid stale ServiceException when socket is disconnected
+                if (!socket.Connected)
+                {
+                    return;
+                }
+
             }
 
             BufferManager.LockBuffer(m_receiveBuffer);
@@ -543,12 +547,17 @@ namespace Opc.Ua.Bindings
                     // I/O completed synchronously
                     if ((args.SocketError != SocketError.Success) || (args.BytesTransferred < (m_bytesToReceive - m_bytesReceived)))
                     {
-                        BufferManager.UnlockBuffer(m_receiveBuffer);
-                        throw ServiceResultException.Create(StatusCodes.BadTcpInternalError, null, args.SocketError.ToString());
+                        throw ServiceResultException.Create(StatusCodes.BadTcpInternalError, args.SocketError.ToString());
                     }
 
                     args.Dispose();
                 }
+            }
+            catch (ServiceResultException sre)
+            {
+                args.Dispose();
+                BufferManager.UnlockBuffer(m_receiveBuffer);
+                throw sre;
             }
             catch (Exception ex)
             {

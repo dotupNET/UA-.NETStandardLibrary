@@ -318,7 +318,7 @@ namespace Opc.Ua
 
             Entry entry = Find(thumbprint);
 
-            DirectoryInfo info = new DirectoryInfo(this.Directory.FullName + "\\crl");
+            DirectoryInfo info = new DirectoryInfo(this.Directory.FullName + Path.DirectorySeparatorChar + "crl");
 
             foreach (FileInfo file in info.GetFiles("*.crl"))
             {
@@ -395,6 +395,11 @@ namespace Opc.Ua
                 return null;
             }
 
+            if (string.IsNullOrEmpty(thumbprint) && string.IsNullOrEmpty(subjectName))
+            {
+                return null;
+            }
+
             foreach (FileInfo file in m_certificateSubdir.GetFiles("*.der"))
             {
                 try
@@ -403,7 +408,7 @@ namespace Opc.Ua
 
                     if (!String.IsNullOrEmpty(thumbprint))
                     {
-                        if (certificate.Thumbprint != thumbprint)
+                        if (!string.Equals(certificate.Thumbprint, thumbprint, StringComparison.CurrentCultureIgnoreCase))
                         {
                             continue;
                         }
@@ -428,13 +433,24 @@ namespace Opc.Ua
                     filePath.Append(fileRoot);
 
                     FileInfo privateKeyFile = new FileInfo(filePath.ToString() + ".pfx");
+                    RSA rsa = null;
 
-                    certificate = new X509Certificate2(
-                        privateKeyFile.FullName,
-                        (password == null) ? String.Empty : password,
-                        X509KeyStorageFlags.Exportable | X509KeyStorageFlags.DefaultKeySet);
-
-                    RSA rsa = certificate.GetRSAPrivateKey();
+                    try
+                    {
+                        certificate = new X509Certificate2(
+                            privateKeyFile.FullName,
+                            (password == null) ? String.Empty : password,
+                            X509KeyStorageFlags.Exportable | X509KeyStorageFlags.MachineKeySet);
+                        rsa = certificate.GetRSAPrivateKey();
+                    }
+                    catch (Exception)
+                    {
+                        certificate = new X509Certificate2(
+                            privateKeyFile.FullName,
+                            (password == null) ? String.Empty : password,
+                            X509KeyStorageFlags.Exportable | X509KeyStorageFlags.DefaultKeySet);
+                        rsa = certificate.GetRSAPrivateKey();
+                    }
                     if (rsa != null)
                     {
                         int inputBlockSize = rsa.KeySize / 8 - 42;
@@ -442,6 +458,7 @@ namespace Opc.Ua
                         byte[] bytes2 = rsa.Decrypt(bytes1, RSAEncryptionPadding.OaepSHA1);
                         if (bytes2 != null)
                         {
+                            // Utils.Trace(1, "RSA: {0}", certificate.Thumbprint);
                             return certificate;
                         }
                     }
@@ -536,7 +553,7 @@ namespace Opc.Ua
             List<X509CRL> crls = new List<X509CRL>();
 
             // check for CRL.
-            DirectoryInfo info = new DirectoryInfo(this.Directory.FullName + "\\crl");
+            DirectoryInfo info = new DirectoryInfo(this.Directory.FullName + Path.DirectorySeparatorChar + "crl");
 
             if (info.Exists)
             {
@@ -563,7 +580,7 @@ namespace Opc.Ua
             List<X509CRL> crls = new List<X509CRL>();
 
             // check for CRL.
-            DirectoryInfo info = new DirectoryInfo(this.Directory.FullName + "\\crl");
+            DirectoryInfo info = new DirectoryInfo(this.Directory.FullName + Path.DirectorySeparatorChar + "crl");
 
             if (info.Exists)
             {
@@ -594,7 +611,7 @@ namespace Opc.Ua
         /// <summary>
         /// Adds a CRL to the store.
         /// </summary>
-        public async void AddCRL(X509CRL crl)
+        public void AddCRL(X509CRL crl)
         {
             if (crl == null)
             {
@@ -602,7 +619,8 @@ namespace Opc.Ua
             }
 
             X509Certificate2 issuer = null;
-            X509Certificate2Collection certificates = await Enumerate();
+            X509Certificate2Collection certificates = null;
+            Task.Run( async () => certificates = await Enumerate()).Wait();
             foreach (X509Certificate2 certificate in certificates)
             {
                 if (Utils.CompareDistinguishedName(certificate.Subject, crl.Issuer))
@@ -622,7 +640,8 @@ namespace Opc.Ua
 
             StringBuilder builder = new StringBuilder();
             builder.Append(m_directory.FullName);
-            builder.Append("\\crl\\");
+            
+            builder.Append(Path.DirectorySeparatorChar + "crl" + Path.DirectorySeparatorChar);
             builder.Append(GetFileName(issuer));
             builder.Append(".crl");
 
@@ -647,7 +666,7 @@ namespace Opc.Ua
             }
 
             string filePath = m_directory.FullName;
-            filePath += "\\crl";
+            filePath += Path.DirectorySeparatorChar + "crl";
 
             DirectoryInfo dirInfo = new DirectoryInfo(filePath);
 

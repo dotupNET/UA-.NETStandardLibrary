@@ -194,11 +194,11 @@ namespace Opc.Ua.Bindings
                     m_listeningSocket.Listen(Int32.MaxValue);
                     m_listeningSocket.AcceptAsync(args);
                 }
-                catch
+                catch (Exception ex)
                 {
                     // no IPv4 support.
                     m_listeningSocket = null;
-                    Utils.Trace("failed to create IPv4 listening socket");
+                    Utils.Trace("failed to create IPv4 listening socket: " + ex.Message);
                 }
 
                 // create IPv6 socket
@@ -213,11 +213,11 @@ namespace Opc.Ua.Bindings
                     m_listeningSocketIPv6.Listen(Int32.MaxValue);
                     m_listeningSocketIPv6.AcceptAsync(args);
                 }
-                catch
+                catch (Exception ex)
                 {
                     // no IPv6 support
                     m_listeningSocketIPv6 = null;
-                    Utils.Trace("failed to create IPv6 listening socket");
+                    Utils.Trace("failed to create IPv6 listening socket: " + ex.Message);
                 }
 
                 if (m_listeningSocketIPv6 == null && m_listeningSocket == null)
@@ -273,6 +273,7 @@ namespace Opc.Ua.Bindings
             }
                        
             channel.Reconnect(socket, requestId, sequenceNumber, clientCertificate, token, request);
+            Utils.Trace("Channel {0} reconnected", channelId);
             return true;
         }
 
@@ -342,17 +343,20 @@ namespace Opc.Ua.Bindings
 
                 e.Dispose();
 
-                // go back and wait for the next connection.
-                try
-                {
-                    e = new SocketAsyncEventArgs();
-                    e.Completed += OnAccept;
-                    e.UserToken = listeningSocket;
-                    listeningSocket.AcceptAsync(e);
-                }
-                catch (Exception ex)
-                {
-                    Utils.Trace(ex, "Unexpected error listening for a new connection.");
+                if (e.SocketError != SocketError.OperationAborted)
+                { 
+                    // go back and wait for the next connection.
+                    try
+                    {
+                        e = new SocketAsyncEventArgs();
+                        e.Completed += OnAccept;
+                        e.UserToken = listeningSocket;
+                        listeningSocket.AcceptAsync(e);
+                    }
+                    catch (Exception ex)
+                    {
+                        Utils.Trace(ex, "Unexpected error listening for a new connection.");
+                    }
                 }
             }
         }

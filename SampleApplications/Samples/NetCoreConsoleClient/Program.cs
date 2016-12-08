@@ -57,18 +57,23 @@ namespace NetCoreConsoleClient
                     ApplicationCertificate = new CertificateIdentifier
                     {
                         StoreType = "Directory",
-                        StorePath = "",
+                        StorePath = "./OPC Foundation/CertificateStores/MachineDefault",
                         SubjectName = Utils.Format("CN={0}, DC={1}", "UA Sample Client", Utils.GetHostName())
                     },
                     TrustedPeerCertificates = new CertificateTrustList
                     {
                         StoreType = "Directory",
-                        StorePath = "",
+                        StorePath = "./OPC Foundation/CertificateStores/UA Applications",
                     },
                     TrustedIssuerCertificates = new CertificateTrustList
                     {
                         StoreType = "Directory",
-                        StorePath = "",
+                        StorePath = "./OPC Foundation/CertificateStores/UA Certificate Authorities",
+                    },
+                    RejectedCertificateStore = new CertificateTrustList
+                    {
+                        StoreType = "Directory",
+                        StorePath = "./OPC Foundation/CertificateStores/RejectedCertificates",
                     },
                     NonceLength = 32,
                     AutoAcceptUntrustedCertificates = true
@@ -91,7 +96,7 @@ namespace NetCoreConsoleClient
                 Console.WriteLine("    WARN: missing application certificate, using unsecure connection.");
             }
 
-            Console.WriteLine("2 - Discover endpoints of OPC UA server.");
+            Console.WriteLine("2 - Discover endpoints of {0}.", endpointURL);
             Uri endpointURI = new Uri(endpointURL);
             var endpointCollection = DiscoverEndpoints(config, endpointURI, 10);
             var selectedEndpoint = SelectUaTcpEndpoint(endpointCollection, haveAppCertificate);

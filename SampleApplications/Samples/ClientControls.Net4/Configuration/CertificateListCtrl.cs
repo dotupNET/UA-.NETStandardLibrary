@@ -39,6 +39,7 @@ using System.Xml;
 using System.IO;
 using System.Runtime.Serialization;
 using Opc.Ua.Configuration;
+using System.Threading.Tasks;
 
 namespace Opc.Ua.Client.Controls
 {
@@ -203,7 +204,7 @@ namespace Opc.Ua.Client.Controls
         /// <summary>
         /// Displays the applications in the control.
         /// </summary>
-        internal async void Initialize(CertificateStoreIdentifier id, IList<string> thumbprints)
+        internal async Task Initialize(CertificateStoreIdentifier id, IList<string> thumbprints)
         {
             ItemsLV.Items.Clear();
 
@@ -214,7 +215,7 @@ namespace Opc.Ua.Client.Controls
             {
                 Instructions = "No certificates are in the store.";
                 AdjustColumns();
-                return;
+                return ;
             }
 
             try
@@ -388,7 +389,7 @@ namespace Opc.Ua.Client.Controls
                 }
 
                 listItem.SubItems[3].Text = buffer.ToString();
-                listItem.SubItems[4].Text = Utils.GetApplicationUriFromCertficate(certificate);
+                listItem.SubItems[4].Text = Utils.GetApplicationUriFromCertificate(certificate);
                 listItem.SubItems[5].Text = String.Format("{0:yyyy-MM-dd}", certificate.NotAfter);
             }
 
@@ -519,7 +520,7 @@ namespace Opc.Ua.Client.Controls
             catch (Exception exception)
             {
                 GuiUtils.HandleException(this.Text, MethodBase.GetCurrentMethod(), exception);
-                Initialize(m_storeId, m_thumbprints);
+                await Initialize(m_storeId, m_thumbprints);
             }
         }
 

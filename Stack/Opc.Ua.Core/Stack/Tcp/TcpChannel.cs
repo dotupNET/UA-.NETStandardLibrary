@@ -351,7 +351,7 @@ namespace Opc.Ua.Bindings
         {
         }
         #endregion
-        
+
         #region Outgoing Message Support Functions
         /// <summary>
         /// Handles a write complete event.
@@ -359,20 +359,23 @@ namespace Opc.Ua.Bindings
         protected virtual void OnWriteComplete(object sender, SocketAsyncEventArgs e)
         {
             lock (DataLock)
-            {                    
+            {
                 ServiceResult error = ServiceResult.Good;
-                             
+
                 try
                 {
                     if (e.BytesTransferred == 0)
                     {
                         error = ServiceResult.Create(StatusCodes.BadConnectionClosed, "The socket was closed by the remote application.");
                     }
-
-                    HandleWriteComplete((BufferCollection) e.BufferList, e.UserToken, e.BytesTransferred, error);
+                    if (e.Buffer != null)
+                    {
+                        BufferManager.ReturnBuffer(e.Buffer, "OnWriteComplete");
+                    }
+                    HandleWriteComplete((BufferCollection)e.BufferList, e.UserToken, e.BytesTransferred, error);
                 }
                 catch (Exception ex)
-                {     
+                {
                     error = ServiceResult.Create(ex, StatusCodes.BadTcpInternalError, "Unexpected error during write operation.");
                     HandleWriteComplete((BufferCollection)e.BufferList, e.UserToken, e.BytesTransferred, error);
                 }
@@ -427,7 +430,10 @@ namespace Opc.Ua.Bindings
                 args.BufferList = buffers;
                 args.Completed += OnWriteComplete;
                 args.UserToken = state;
-                if (!m_socket.m_socket.SendAsync(args))
+                args.SocketError = SocketError.NotConnected;
+                if (m_socket == null ||
+                    m_socket.m_socket == null ||
+                    !m_socket.m_socket.SendAsync(args))
                 {
                     // I/O completed synchronously
                     if ((args.SocketError != SocketError.Success) || (args.BytesTransferred < buffers.TotalSize))
@@ -504,6 +510,8 @@ namespace Opc.Ua.Bindings
 
                 reason = new UTF8Encoding().GetString(reasonBytes, 0, reasonLength);
             }
+            
+            // Utils.Trace("Channel {0}: Read = {1}", ChannelId, reason);
             
             return ServiceResult.Create(statusCode, "Error received from remote host: {0}", reason);
         }

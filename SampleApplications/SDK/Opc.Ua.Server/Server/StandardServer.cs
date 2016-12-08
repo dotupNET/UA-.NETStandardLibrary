@@ -344,7 +344,7 @@ namespace Opc.Ua.Server
 
                         if (context.SecurityPolicyUri != SecurityPolicies.None)
                         {
-                            string certificateApplicationUri = Utils.GetApplicationUriFromCertficate(parsedClientCertificate);
+                            string certificateApplicationUri = Utils.GetApplicationUriFromCertificate(parsedClientCertificate);
 
                             // verify if applicationUri from ApplicationDescription matches the applicationUri in the client certificate.
                             if (!String.IsNullOrEmpty(certificateApplicationUri) &&
@@ -371,6 +371,12 @@ namespace Opc.Ua.Server
                     if (clientNonce.Length < m_minNonceLength)
                     {
                         throw new ServiceResultException(StatusCodes.BadNonceInvalid);
+                    }
+
+                    // ignore nonce if security policy set to none
+                    if (context.SecurityPolicyUri == SecurityPolicies.None)
+                    {
+                        clientNonce = null;
                     }
                 }
 
@@ -415,7 +421,7 @@ namespace Opc.Ua.Server
                     }
                 }
 
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.CurrentSessionCount++;
                     ServerInternal.ServerDiagnostics.CumulatedSessionCount++;
@@ -429,7 +435,7 @@ namespace Opc.Ua.Server
             {
                 Utils.Trace("Server - SESSION CREATE failed. {0}", e.Message);
 
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedSessionCount++;
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
@@ -503,7 +509,7 @@ namespace Opc.Ua.Server
                         SoftwareCertificate softwareCertificate = null;
 
                         ServiceResult result = SoftwareCertificate.Validate(
-                            new CertificateValidator(),
+                            CertificateValidator,
                             signedCertificate.CertificateData,
                             out softwareCertificate);
 
@@ -565,7 +571,7 @@ namespace Opc.Ua.Server
             {
                 Utils.Trace("Server - SESSION ACTIVATE failed. {0}", e.Message);
 
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -576,7 +582,7 @@ namespace Opc.Ua.Server
                 }
 
                 throw TranslateException((DiagnosticsMasks)requestHeader.ReturnDiagnostics, localeIds, e);
-            }  
+            }
             finally
             {
                 OnRequestComplete(context);
@@ -627,6 +633,28 @@ namespace Opc.Ua.Server
         }
 
         /// <summary>
+        /// Creates the response header.
+        /// </summary>
+        /// <param name="requestHeader">The object that contains description for the RequestHeader DataType.</param>
+        /// <param name="exception">The exception used to create DiagnosticInfo assigned to the ServiceDiagnostics.</param>
+        /// <returns>Returns a description for the ResponseHeader DataType. </returns>
+        protected ResponseHeader CreateResponse(RequestHeader requestHeader, ServiceResultException exception)
+        {
+            ResponseHeader responseHeader = new ResponseHeader();
+
+            responseHeader.ServiceResult = exception.StatusCode;
+
+            responseHeader.Timestamp = DateTime.UtcNow;
+            responseHeader.RequestHandle = requestHeader.RequestHandle;
+
+            StringTable stringTable = new StringTable();
+            responseHeader.ServiceDiagnostics = new DiagnosticInfo(exception, (DiagnosticsMasks)requestHeader.ReturnDiagnostics, true, stringTable);
+            responseHeader.StringTable = stringTable.ToArray();
+
+            return responseHeader;
+        }
+
+        /// <summary>
         /// Invokes the CloseSession service.
         /// </summary>
         /// <param name="requestHeader">The request header.</param>
@@ -645,7 +673,12 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                if (e.StatusCode == StatusCodes.BadSessionNotActivated)
+                {
+                    return CreateResponse(requestHeader, e);
+                }
+
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -688,7 +721,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -750,7 +783,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -809,7 +842,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -862,7 +895,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -907,7 +940,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -963,7 +996,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -1022,7 +1055,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -1085,7 +1118,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -1139,7 +1172,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -1193,7 +1226,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -1263,7 +1296,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -1317,7 +1350,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -1403,7 +1436,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -1420,7 +1453,6 @@ namespace Opc.Ua.Server
                 OnRequestComplete(context);
             }
         }
-
         /// <summary>
         /// Begins an asynchronous publish operation.
         /// </summary>
@@ -1472,7 +1504,7 @@ namespace Opc.Ua.Server
             {
                 OnRequestComplete(context);
 
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -1508,7 +1540,7 @@ namespace Opc.Ua.Server
             {
                 OnRequestComplete(context);
 
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -1551,7 +1583,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -1617,7 +1649,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -1674,7 +1706,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -1747,7 +1779,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -1806,7 +1838,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -1866,7 +1898,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -1923,7 +1955,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -1983,7 +2015,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -2037,7 +2069,7 @@ namespace Opc.Ua.Server
             }
             catch (ServiceResultException e)
             {
-                lock (ServerInternal.DiagnosticsLock)
+                lock (ServerInternal.DiagnosticsWriteLock)
                 {
                     ServerInternal.ServerDiagnostics.RejectedRequestsCount++;
 
@@ -2054,9 +2086,9 @@ namespace Opc.Ua.Server
                 OnRequestComplete(context);
             }
         }
-        #endregion
+#endregion
 
-        #region Public Methods used by the Host Process
+#region Public Methods used by the Host Process
         /// <summary>
         /// The state object associated with the server.
         /// It provides the shared components for the Server.
@@ -2108,60 +2140,63 @@ namespace Opc.Ua.Server
             try
             {
                 // try each endpoint.
-                foreach (ConfiguredEndpoint endpoint in m_registrationEndpoints.Endpoints)
+                if (m_registrationEndpoints != null)
                 {
-                    RegistrationClient client = null;
-
-                    try
+                    foreach (ConfiguredEndpoint endpoint in m_registrationEndpoints.Endpoints)
                     {
-                        // update from the server.
-                        bool updateRequired = true;
+                        RegistrationClient client = null;
 
-                        lock (m_registrationLock)
+                        try
                         {
-                            updateRequired = endpoint.UpdateBeforeConnect;
-                        }
+                            // update from the server.
+                            bool updateRequired = true;
 
-                        if (updateRequired)
-                        {
-                            endpoint.UpdateFromServer();
-                        }
-
-                        lock (m_registrationLock)
-                        {
-                            endpoint.UpdateBeforeConnect = false;
-                        }
-
-                        // create the client.
-                        client = RegistrationClient.Create(
-                            configuration,
-                            endpoint.Description,
-                            endpoint.Configuration,
-                            base.InstanceCertificate);
-
-                        // register the server.
-                        RequestHeader requestHeader = new RequestHeader();
-                        requestHeader.Timestamp = DateTime.UtcNow;
-
-                        client.OperationTimeout = 10000;
-                        client.RegisterServer(requestHeader, m_registrationInfo);
-                        return true;
-                    }
-                    catch (Exception e)
-                    {
-                        Utils.Trace("Register server failed for at: {0}. Exception={1}", endpoint.EndpointUrl, e.Message);
-                    }
-                    finally
-                    {
-                        if (client != null)
-                        {
-                            try
+                            lock (m_registrationLock)
                             {
-                                client.Close();
+                                updateRequired = endpoint.UpdateBeforeConnect;
                             }
-                            catch (Exception e)
+
+                            if (updateRequired)
                             {
-                                Utils.Trace("Could not cleanly close connection with LDS. Exception={0}", e.Message);
+                                endpoint.UpdateFromServer();
+                            }
+
+                            lock (m_registrationLock)
+                            {
+                                endpoint.UpdateBeforeConnect = false;
+                            }
+
+                            // create the client.
+                            client = RegistrationClient.Create(
+                                configuration,
+                                endpoint.Description,
+                                endpoint.Configuration,
+                                base.InstanceCertificate);
+
+                            // register the server.
+                            RequestHeader requestHeader = new RequestHeader();
+                            requestHeader.Timestamp = DateTime.UtcNow;
+
+                            client.OperationTimeout = 10000;
+                            client.RegisterServer(requestHeader, m_registrationInfo);
+                            return true;
+                        }
+                        catch (Exception e)
+                        {
+                            Utils.Trace("Register server failed for at: {0}. Exception={1}", endpoint.EndpointUrl, e.Message);
+                        }
+                        finally
+                        {
+                            if (client != null)
+                            {
+                                try
+                                {
+                                    client.Close();
+                                }
+                                catch (Exception e)
+                                {
+                                    Utils.Trace("Could not cleanly close connection with LDS. Exception={0}", e.Message);
+                                }
                             }
                         }
                     }
@@ -2270,9 +2305,9 @@ namespace Opc.Ua.Server
                 Utils.Trace(e, "Unexpected exception handling registration timer.");
             }
         }
-        #endregion
+#endregion
 
-        #region Protected Members used for Request Processing
+#region Protected Members used for Request Processing
         /// <summary>
         /// The synchronization object.
         /// </summary>
@@ -2502,9 +2537,9 @@ namespace Opc.Ua.Server
                 m_serverInternal.RequestManager.RequestCompleted(context);
             }
         }        
-        #endregion
+#endregion
 
-        #region Protected Members used for Initialization
+#region Protected Members used for Initialization
         /// <summary>
         /// Raised when the configuration changes.
         /// </summary>
@@ -2639,15 +2674,16 @@ namespace Opc.Ua.Server
             endpoints.InsertRange(0, endpointsForHost);
 
             // create HTTPS host.
+#if !NO_HTTPS
             endpointsForHost = CreateHttpsServiceHost(
-                hosts,
-                configuration,
-                configuration.ServerConfiguration.BaseAddresses, 
-                serverDescription,
-                configuration.ServerConfiguration.SecurityPolicies);
+            hosts,
+            configuration,
+            configuration.ServerConfiguration.BaseAddresses,
+            serverDescription,
+            configuration.ServerConfiguration.SecurityPolicies);
 
             endpoints.AddRange(endpointsForHost);
-
+#endif
             return new List<Task>(hosts.Values);
         }
 
@@ -2822,7 +2858,7 @@ namespace Opc.Ua.Server
         /// <summary>
         /// Called before the server stops
         /// </summary>
-        protected override async void OnServerStopping()
+        protected override void OnServerStopping()
         {
             // halt any outstanding timer.
             lock (m_registrationLock)
@@ -2837,9 +2873,12 @@ namespace Opc.Ua.Server
             // attempt graceful shutdown the server.
             try
             {
-                // unregister from Discovery Server
-                m_registrationInfo.IsOnline = false;
-                await RegisterWithDiscoveryServer();
+                if (m_maxRegistrationInterval > 0)
+                {
+                    // unregister from Discovery Server
+                    m_registrationInfo.IsOnline = false;
+                    Task.Run(async () => await RegisterWithDiscoveryServer()).Wait();
+                }
 
                 lock (m_lock)
                 {
@@ -3012,9 +3051,9 @@ namespace Opc.Ua.Server
         {
             // may be overridden by the subclass.
         }
-        #endregion
+#endregion
 
-        #region Private Fields
+#region Private Fields
         private object m_lock = new object();    
         private ServerInternalData m_serverInternal;
         private ConfigurationWatcher m_configurationWatcher;
@@ -3027,6 +3066,6 @@ namespace Opc.Ua.Server
         private int m_maxRegistrationInterval;
         private int m_lastRegistrationInterval;
         private int m_minNonceLength;
-        #endregion
+#endregion
     }
 }

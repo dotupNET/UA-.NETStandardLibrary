@@ -573,6 +573,11 @@ namespace Opc.Ua
         }
 
         /// <summary>
+        /// Gets or set the capabilities for the server.
+        /// </summary>
+        protected StringCollection ServerCapabilities { get; set; }
+
+        /// <summary>
         /// Gets the list of transport listeners used by the server instance.
         /// </summary>
         /// <value>The transport listeners.</value>
@@ -737,6 +742,7 @@ namespace Opc.Ua
             return endpoints;
         }
 
+#if !NO_HTTPS
         /// <summary>
         /// Create a new service host for UA HTTPS.
         /// </summary>
@@ -857,12 +863,12 @@ namespace Opc.Ua
                         message += (" " + e.InnerException.Message);
                     }
                     Utils.Trace(e, message);
-					throw e;
                 }
             }
 
             return endpoints;
         }
+#endif
 
         /// <summary>
         /// Returns the UserTokenPolicies supported by the server.
@@ -1296,7 +1302,7 @@ namespace Opc.Ua
             // assign a unique identifier if none specified.
             if (String.IsNullOrEmpty(configuration.ApplicationUri))
             {
-                configuration.ApplicationUri = Utils.GetApplicationUriFromCertficate(InstanceCertificate);
+                configuration.ApplicationUri = Utils.GetApplicationUriFromCertificate(InstanceCertificate);
 
                 if (String.IsNullOrEmpty(configuration.ApplicationUri))
                 {

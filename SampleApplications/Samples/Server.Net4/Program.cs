@@ -31,6 +31,7 @@ using System;
 using System.Windows.Forms;
 using Opc.Ua.Configuration;
 using Opc.Ua.Client.Controls;
+using System.Threading.Tasks;
 
 namespace Opc.Ua.Sample
 {
@@ -53,22 +54,34 @@ namespace Opc.Ua.Sample
 
             try
             {
-                // load the application configuration.
-                application.LoadApplicationConfiguration(false);
+                Task<ApplicationConfiguration> task = application.LoadApplicationConfiguration(false);
+                task.Wait();
 
                 // check the application certificate.
-                application.CheckApplicationInstanceCertificate(false, 0);
+                Task<bool> task2 = application.CheckApplicationInstanceCertificate(false, 0);
+                task2.Wait();
+                bool certOK = task2.Result;
+                if (!certOK)
+                {
+                    throw new Exception("Application instance certificate invalid!");
+                }
 
                 // start the server.
-                application.Start(new SampleServer());
+                Task task3 = application.Start(new SampleServer());
+                task3.Wait();
 
                 // run the application interactively.
                 Application.Run(new ServerForm(application));
             }
             catch (Exception e)
             {
-                MessageBox.Show("Exception: " + e.Message, application.ApplicationName);
-                return;
+                string text = "Exception: " + e.Message;
+                if (e.InnerException != null)
+                {
+                    text += "\r\nInner exception: ";
+                    text += e.InnerException.Message;
+                }
+                MessageBox.Show(text, application.ApplicationName);
             }
         }
     }
