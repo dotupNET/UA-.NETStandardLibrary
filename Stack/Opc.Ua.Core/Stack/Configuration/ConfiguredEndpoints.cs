@@ -813,10 +813,13 @@ namespace Opc.Ua
 
                 if (url != null)
                 {
+
+                    // MY EDITS TO TRY MAKING WORK WITH USERNAME
+
                     m_description.EndpointUrl = url.ToString();
-                    m_description.SecurityMode = MessageSecurityMode.SignAndEncrypt;
-                    m_description.SecurityPolicyUri = SecurityPolicies.Basic128Rsa15;
-                    m_description.UserIdentityTokens.Add(new UserTokenPolicy(UserTokenType.Anonymous));
+                    m_description.SecurityMode = MessageSecurityMode.None; // MessageSecurityMode.SignAndEncrypt;
+                    m_description.SecurityPolicyUri = SecurityPolicies.None; //SecurityPolicies.Basic128Rsa15;
+                    m_description.UserIdentityTokens.Add(new UserTokenPolicy(UserTokenType.UserName)); // Anonymous));
 
                     if (url.Scheme == Utils.UriSchemeHttps)
                     {
